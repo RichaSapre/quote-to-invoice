@@ -1,11 +1,20 @@
 import { useEffect, useState } from 'react'
 import api from '../api'
 
+type Invoice = {
+  id: number
+  customer_name: string
+  total_amount: number
+  quote_id: number
+  created_at: string
+  status: string
+}
+
 export default function FinanceView() {
-  const [invoices, setInvoices] = useState<any[]>([])
+  const [invoices, setInvoices] = useState<Invoice[]>([])
 
   useEffect(() => {
-    api.get('/invoices').then(res => setInvoices(res.data))
+    api.get('/invoices').then(res => setInvoices(res.data as Invoice[]))
   }, [])
 
   const totalInvoiced = invoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0)
