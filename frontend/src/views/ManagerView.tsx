@@ -1,18 +1,30 @@
 import { useEffect, useState } from 'react'
 import api from '../api'
 
+type PendingApproval = {
+  approval_id: number
+  quote_id: number
+  customer_name: string
+  total_amount: number
+  approver_id: number
+}
+
 export default function ManagerView() {
-  const [pending, setPending] = useState<any[]>([])
+  const [pending, setPending] = useState<PendingApproval[]>([])
   const [comment, setComment] = useState<{ [key: number]: string }>({})
   const [msg, setMsg] = useState('')
 
   const loadPending = async () => {
     const res = await api.get('/approvals/pending')
-    setPending(res.data)
+    setPending(res.data as PendingApproval[])
   }
 
   useEffect(() => {
-    loadPending()
+    const fetchPending = async () => {
+      await loadPending()
+    }
+
+    void fetchPending()
   }, [])
 
   const act = async (approvalId: number, managerId: number, action: string) => {

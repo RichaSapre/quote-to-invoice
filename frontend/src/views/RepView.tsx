@@ -1,23 +1,45 @@
 import { useEffect, useState } from 'react'
 import api from '../api'
 
+type QuoteLineItem = {
+  id: number
+  product_name: string
+  quantity: number
+  unit_price: number
+  line_total: number
+}
+
+type Quote = {
+  id: number
+  rep_id: number
+  customer_name: string
+  total_amount: number
+  status: string
+  line_items?: QuoteLineItem[]
+}
+
 export default function RepView() {
   const [customer, setCustomer] = useState('')
   const [repId, setRepId] = useState(1)
-  const [quotes, setQuotes] = useState<any[]>([])
-  const [selectedQuote, setSelectedQuote] = useState<any>(null)
+  const [quotes, setQuotes] = useState<Quote[]>([])
+  const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null)
   const [product, setProduct] = useState('')
   const [qty, setQty] = useState(1)
   const [price, setPrice] = useState(0)
   const [msg, setMsg] = useState('')
+  const selectedLineItems = selectedQuote?.line_items ?? []
 
   const loadQuotes = async () => {
     const res = await api.get('/quotes')
-    setQuotes(res.data)
+    setQuotes(res.data as Quote[])
   }
 
   useEffect(() => {
-    loadQuotes()
+    const fetchQuotes = async () => {
+      await loadQuotes()
+    }
+
+    void fetchQuotes()
   }, [])
 
   const createQuote = async () => {
@@ -41,7 +63,7 @@ export default function RepView() {
     setMsg('Item added!')
     loadQuotes()
     const res = await api.get(`/quotes/${selectedQuote.id}`)
-    setSelectedQuote(res.data)
+    setSelectedQuote(res.data as Quote)
   }
 
   const submitQuote = async (quoteId: number) => {
@@ -226,8 +248,8 @@ export default function RepView() {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedQuote.line_items?.length > 0 ? (
-                        selectedQuote.line_items.map((item: any) => (
+                      {selectedLineItems.length > 0 ? (
+                        selectedLineItems.map((item: QuoteLineItem) => (
                           <tr key={item.id}>
                             <td>{item.product_name}</td>
                             <td>{item.quantity}</td>
