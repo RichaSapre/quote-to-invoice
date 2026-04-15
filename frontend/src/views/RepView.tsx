@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { AxiosError } from 'axios'
 import api from '../api'
 
 type QuoteLineItem = {
@@ -18,9 +19,16 @@ type Quote = {
   line_items?: QuoteLineItem[]
 }
 
+type User = {
+  id: number
+  name: string
+  role: string
+}
+
 export default function RepView() {
   const [customer, setCustomer] = useState('')
   const [repId, setRepId] = useState(1)
+  const [repName, setRepName] = useState('Assigned rep')
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null)
   const [product, setProduct] = useState('')
@@ -29,48 +37,76 @@ export default function RepView() {
   const [msg, setMsg] = useState('')
   const selectedLineItems = selectedQuote?.line_items ?? []
 
+  const getErrorMessage = (error: unknown) =>
+    (error as AxiosError<{ detail?: string }>)?.response?.data?.detail ||
+    'Something went wrong. Please try again.'
+
   const loadQuotes = async () => {
     const res = await api.get('/quotes')
     setQuotes(res.data as Quote[])
   }
 
+  const loadRep = async () => {
+    const res = await api.get('/users')
+    const users = res.data as User[]
+    const rep = users.find(user => user.role === 'rep')
+    if (rep) {
+      setRepId(rep.id)
+      setRepName(rep.name)
+    }
+  }
+
   useEffect(() => {
-    const fetchQuotes = async () => {
+    const bootstrap = async () => {
+      await loadRep()
       await loadQuotes()
     }
 
-    void fetchQuotes()
+    void bootstrap()
   }, [])
 
   const createQuote = async () => {
     if (!customer) return
-    await api.post('/quotes', { rep_id: repId, customer_name: customer })
-    setCustomer('')
-    setMsg('Quote created!')
-    loadQuotes()
+    try {
+      const res = await api.post('/quotes', { rep_id: repId, customer_name: customer })
+      setCustomer('')
+      setSelectedQuote(res.data as Quote)
+      setMsg('Quote created!')
+      await loadQuotes()
+    } catch (error: unknown) {
+      setMsg(getErrorMessage(error))
+    }
   }
 
   const addItem = async () => {
     if (!selectedQuote || !product) return
-    await api.post(`/quotes/${selectedQuote.id}/line-items`, {
-      product_name: product,
-      quantity: qty,
-      unit_price: price
-    })
-    setProduct('')
-    setQty(1)
-    setPrice(0)
-    setMsg('Item added!')
-    loadQuotes()
-    const res = await api.get(`/quotes/${selectedQuote.id}`)
-    setSelectedQuote(res.data as Quote)
+    try {
+      await api.post(`/quotes/${selectedQuote.id}/line-items`, {
+        product_name: product,
+        quantity: qty,
+        unit_price: price
+      })
+      setProduct('')
+      setQty(1)
+      setPrice(0)
+      setMsg('Item added!')
+      await loadQuotes()
+      const res = await api.get(`/quotes/${selectedQuote.id}`)
+      setSelectedQuote(res.data as Quote)
+    } catch (error: unknown) {
+      setMsg(getErrorMessage(error))
+    }
   }
 
   const submitQuote = async (quoteId: number) => {
-    await api.post(`/quotes/${quoteId}/submit`)
-    setMsg('Quote submitted!')
-    loadQuotes()
-    setSelectedQuote(null)
+    try {
+      await api.post(`/quotes/${quoteId}/submit`)
+      setMsg('Quote submitted!')
+      await loadQuotes()
+      setSelectedQuote(null)
+    } catch (error: unknown) {
+      setMsg(getErrorMessage(error))
+    }
   }
 
   return (
@@ -99,13 +135,8 @@ export default function RepView() {
               </div>
 
               <div className="field">
-                <label htmlFor="rep-id">Rep ID</label>
-                <input
-                  id="rep-id"
-                  type="number"
-                  value={repId}
-                  onChange={e => setRepId(Number(e.target.value))}
-                />
+                <label htmlFor="rep-id">Assigned rep</label>
+                <input id="rep-id" value={`${repName} · ID ${repId}`} readOnly />
               </div>
             </div>
 
