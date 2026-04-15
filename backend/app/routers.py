@@ -26,7 +26,16 @@ def get_users(db: Session = Depends(get_db)):
 
 @router.post("/quotes", response_model=schemas.QuoteOut)
 def create_quote(quote: schemas.QuoteCreate, db: Session = Depends(get_db)):
-    db_quote = models.Quote(rep_id=quote.rep_id, customer_name=quote.customer_name)
+    rep = db.query(models.User).filter(
+        models.User.id == quote.rep_id,
+        models.User.role == "rep"
+    ).first()
+    if not rep:
+        rep = db.query(models.User).filter(models.User.role == "rep").first()
+    if not rep:
+        raise HTTPException(status_code=400, detail="No sales rep is configured")
+
+    db_quote = models.Quote(rep_id=rep.id, customer_name=quote.customer_name)
     db.add(db_quote)
     db.commit()
     db.refresh(db_quote)
@@ -73,12 +82,16 @@ def submit_quote(quote_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Quote not found")
     if quote.status != "draft":
         raise HTTPException(status_code=400, detail="Only draft quotes can be submitted")
+    if not quote.line_items:
+        raise HTTPException(status_code=400, detail="Add at least one line item before submitting")
     if quote.total_amount >= APPROVAL_THRESHOLD:
         quote.status = "pending_approval"
         manager = db.query(models.User).filter(models.User.role == "manager").first()
         if manager:
             approval = models.Approval(quote_id=quote_id, approver_id=manager.id)
             db.add(approval)
+        else:
+            raise HTTPException(status_code=400, detail="No manager is configured for approvals")
     else:
         quote.status = "approved"
         _generate_invoice(quote, db)
@@ -110,6 +123,8 @@ def action_approval(approval_id: int, body: schemas.ApprovalAction, db: Session 
         raise HTTPException(status_code=404, detail="Approval not found")
     if approval.action is not None:
         raise HTTPException(status_code=400, detail="Already actioned")
+    if approval.approver_id != body.approver_id:
+        raise HTTPException(status_code=403, detail="Approval assigned to a different manager")
     approval.action = body.action
     approval.comment = body.comment
     approval.actioned_at = datetime.utcnow()
